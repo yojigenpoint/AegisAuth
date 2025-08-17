@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.Reflection.Emit;
 using YojigenPoint.Aegisauth.Domain.Common;
@@ -60,8 +61,32 @@ public class AppDbContext : DbContext
                    .HasForeignKey(rt => rt.UserId);
         });
 
+        // Configure soft delete for all entities inheriting from BaseEntity
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                // Create the lambda parameter: e.g., "p"
+                var parameter = Expression.Parameter(entityType.ClrType, "p");
+
+                // Create the property access: e.g., "p.DeletedAtUtc"
+                var property = Expression.Property(parameter, nameof(BaseEntity.DeletedAtUtc));
+
+                // Create the constant value: e.g., "null"
+                var nullValue = Expression.Constant(null, typeof(DateTime?));
+
+                // Create the comparison: e.g., "p.DeletedAtUtc == null"
+                var equality = Expression.Equal(property, nullValue);
+
+                // Build the complete lambda expression: e.g., "p => p.DeletedAtUtc == null"
+                var lambda = Expression.Lambda(equality, parameter);
+
+                // Apply the filter
+                modelBuilder.Entity(entityType.ClrType).HasQueryFilter(lambda);
+            }
+        }
+
         base.OnModelCreating(modelBuilder);
-        ApplySoftDeleteFilter(modelBuilder);
     }
 
     // This override automatically sets the audit fields before saving changes to the database.
@@ -95,26 +120,5 @@ public class AppDbContext : DbContext
                     break;
             }
         }
-    }
-
-    private static void ApplySoftDeleteFilter(ModelBuilder modelBuilder)
-    {
-        // Apply a global query filter for soft deletes
-        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
-        {
-            if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
-            {
-                var method = typeof(AppDbContext).GetMethod(nameof(ApplySoftDeleteFilter),
-                    BindingFlags.NonPublic | BindingFlags.Static);
-
-                var genericMethod = method.MakeGenericMethod(entityType.ClrType);
-                genericMethod.Invoke(null, new object[] { modelBuilder });
-            }
-        }
-    }
-
-    private static void ConfigureSoftDeleteFilter<TEntity>(ModelBuilder modelBuilder) where TEntity : BaseEntity
-    {
-        modelBuilder.Entity<TEntity>().HasQueryFilter(e => e.DeletedAtUtc == null);
     }
 }
