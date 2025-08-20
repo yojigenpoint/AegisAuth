@@ -6,10 +6,11 @@ using System.Reflection;
 using System.Reflection.Emit;
 using YojigenPoint.Aegisauth.Domain.Common;
 using YojigenPoint.Aegisauth.Domain.Entities;
+using YojigenPoint.AegisAuth.Application.Abstractions;
 
 namespace YojigenPoint.AegisAuth.Infrastructure.Persistence;
 
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IUnitOfWork
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
